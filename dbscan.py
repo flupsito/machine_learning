@@ -1,32 +1,29 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import Zscore as zs
-from sklearn.cluster import DBSCAN as DBSCANNER
 from sklearn.metrics import silhouette_score
 from collections import deque
-import argparse
 import time
-from sklearn.neighbors import KDTree
+import kdtree
+import zscore as zs
 
 class dbscan:
 
-	def __init__(self, eps=1, N_min=2):
+	def __init__(self, eps=1, N_min=10):
 		self.data: np.ndarray
-		self.cores: deque
+		self.cores = deque()
 		self.next_cluster = 0
 		self.eps = eps
 		self.N_min = N_min
-		self.tree: KDTree
+		self.tree = kdtree.KDTree('l2')
 
-	def dbscan(self):
+	def dbscan(self, data):
 		zscore = zs.Zscorer()
-		data = np.loadtxt("data_clustering.csv", delimiter=',')
 		zscore.fit(data)
 		data = zscore.transorm(data)
-		self.tree = KDTree(data)
+		self.tree.fit(data)
 		self.data = np.full(shape=(data.shape[0], 5), fill_value=-1, dtype=np.float64)
 		self.data[:,0:3] = np.array(data, dtype=np.float64)
-		self.cores = deque()
+		print(self.data.shape)
 
 	def plot(self):
 		if self.next_cluster > 7:
@@ -51,86 +48,48 @@ class dbscan:
 					ax.set_zlim(-2,2)
 		plt.savefig("plot.png")
 		plt.show()
-		
-	def eucl_3d_dist(self, x, y):
-		if x.shape != y.shape:
-			raise ValueError ("both points are from differant range")
-		return np.sqrt(np.sum(x - y) ** 2)
 	
-	def sum_of_close_points(self, candidate):
-		sum_close_points = 1
-		for point in self.data:
-			if self.eucl_3d_dist(point, candidate) < self.eps:
-				sum_close_points = sum_close_points + 1
-			else:
-				continue
-		return sum_close_points
-	
-	def is_core(self, i, candidate):
-		N = len(self.tree.query_radius([candidate[0:3]], r=self.eps)[0])
+	def is_core(self, i):
+		self.tree.rNearestNeighbor(self.data[i][0:3], self.eps)
+		N = len(self.tree.rClose)
 		if  N >= self.N_min:
-			candidate[4] = 1
+			self.data[i][4] = 1
 			self.cores.append(i)
-		return
 	
 	def get_core_candidates(self):
-		for i, candidate in enumerate(self.data):
-			self.is_core(i, candidate)
+		for i, _ in enumerate(self.data):
+			self.is_core(i)
 	
 	def assign_cluster(self):
 		while self.cores:
 			core_idx = self.cores.popleft()
-			core = self.data[core_idx]
-			if core[3] != -1:
+			if self.data[core_idx][3] != -1:
 				continue
 			else:
-				core[3] = self.next_cluster
+				self.data[core_idx][3] = self.next_cluster
 				self.next_cluster = self.next_cluster + 1
-				self.add_neighbors(core)
+				self.add_neighbors(core_idx)
 				
-	def add_neighbors(self, core):
+	def add_neighbors(self, core_idx):
 		deepseek = deque()
-		deepseek.append(core)
+		deepseek.append(core_idx)
 		while deepseek:
-			current = deepseek.popleft()
+			current_idx = deepseek.popleft()
 			for candidate_idx in self.cores:
 				candidate = self.data[candidate_idx]
 				if candidate[3] != -1:
 					continue
-				elif self.eucl_3d_dist(current, candidate) < self.eps:
-					candidate[3] = core[3]
-					deepseek.append(candidate)
-				else:
-					continue
+				elif self.tree.metric(self.data[current_idx][0:3], candidate[0:3]) < self.eps:
+					candidate[3] = self.data[core_idx][3]
+					deepseek.append(candidate_idx)
 	
 	def get_edges(self):
-		for candidate in self.data:
-			if candidate[4]!=-1:
-				continue
-			else:
-				for core in self.data[self.data[:,4] == 1]:
-					if self.eucl_3d_dist(candidate, core) < self.eps:
-						candidate[3] = core[3]
-					else:
-						continue		
+		candidates = self.data[self.data[:,4] != -1]
+		for candidate in candidates:
+			for core in self.data[self.data[:,4] == 1]:
+				if self.tree.metric(candidate, core) < self.eps:
+					candidate[3] = core[3]	
 
-def main():
-	start_time = time.time()
-	scanner = dbscan(eps=0.5, N_min=15)
-	scanner.dbscan()
-	scanner.get_core_candidates()
-	scanner.assign_cluster()
-	scanner.get_edges()
-	end_time = time.time()
-	print(f"calculation of clusters took {end_time - start_time} seconds")
-	print(f"in the dataset there are: {scanner.next_cluster} cluster")
-	if scanner.next_cluster > 0:
-		score = silhouette_score(scanner.data[:,0:3], scanner.data[:,3])
-		print(f"silhouette_score = {score}")
-	scanner.plot()
-
-if __name__ == "__main__":
-	main()
 	
 	
 	
