@@ -16,12 +16,13 @@ class dbscan:
 		self.tree = kdtree.KDTree('l2')
 
 	def dbscan(self, data):
+		self.dim = data.shape[1]
 		zscore = zs.Zscorer()
 		zscore.fit(data)
 		data = zscore.transorm(data)
 		self.tree.fit(data)
-		self.data = np.full(shape=(data.shape[0], 5), fill_value=-1, dtype=np.float64)
-		self.data[:,0:3] = np.array(data, dtype=np.float64)
+		self.data = np.full(shape=(data.shape[0], self.dim + 2), fill_value=-1, dtype=np.float64)
+		self.data[:,0:self.dim] = np.array(data, dtype=np.float64)
 		print(self.data.shape)
 
 	def plot(self):
@@ -31,7 +32,7 @@ class dbscan:
 			s = ax.scatter(self.data[:,0], self.data[:,1], self.data[:,2], c=self.data[:,3], cmap="plasma")
 			plt.colorbar(s)
 		else:
-			fig, subs = plt.subplots(3,3)
+			fig, _ = plt.subplots(3,3)
 			for i in range(-1,self.next_cluster + 2):
 				if i == self.next_cluster + 1:
 					s = ax.scatter(self.data[:,0], self.data[:,1], self.data[:,2], c=self.data[:,3], cmap="plasma")
@@ -49,10 +50,10 @@ class dbscan:
 		plt.show()
 	
 	def is_core(self, i):
-		self.tree.rNearestNeighbor(self.data[i][0:3], self.eps)
+		self.tree.rNearestNeighbor(self.data[i][0:self.dim], self.eps)
 		N = len(self.tree.rClose)
 		if  N >= self.N_min:
-			self.data[i][4] = 1
+			self.data[i][self.dim + 1] = 1
 			self.cores.append(i)
 	
 	def get_core_candidates(self):
@@ -62,10 +63,10 @@ class dbscan:
 	def assign_cluster(self):
 		while self.cores:
 			core_idx = self.cores.popleft()
-			if self.data[core_idx][3] != -1:
+			if self.data[core_idx][self.dim] != -1:
 				continue
 			else:
-				self.data[core_idx][3] = self.next_cluster
+				self.data[core_idx][self.dim] = self.next_cluster
 				self.next_cluster = self.next_cluster + 1
 				self.add_neighbors(core_idx)
 				
@@ -76,20 +77,23 @@ class dbscan:
 			current_idx = deepseek.popleft()
 			for candidate_idx in self.cores:
 				candidate = self.data[candidate_idx]
-				if candidate[3] != -1:
+				if candidate[self.dim] != -1:
 					continue
-				elif self.tree.metric(self.data[current_idx][0:3], candidate[0:3]) < self.eps:
-					candidate[3] = self.data[core_idx][3]
+				elif self.tree.metric(self.data[current_idx][0:self.dim], candidate[0:self.dim]) < self.eps:
+					candidate[self.dim] = self.data[core_idx][self.dim]
 					deepseek.append(candidate_idx)
 	
 	def get_edges(self):
-		candidates = self.data[self.data[:,4] != -1]
+		candidates = self.data[self.data[:,self.dim + 1] != -1]
 		for candidate in candidates:
-			for core in self.data[self.data[:,4] == 1]:
+			for core in self.data[self.data[:,self.dim + 1] == 1]:
 				if self.tree.metric(candidate, core) < self.eps:
-					candidate[3] = core[3]	
+					candidate[self.dim] = core[self.dim]	
 
-	
+	def fit(self):
+		self.get_core_candidates()
+		self.assign_cluster()
+		self.get_edges()
 	
 	
 

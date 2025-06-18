@@ -59,7 +59,6 @@ class KDTree:
 			return
 		curr = self.root
 		depth = 0
-		count = 0
 		while True:
 			axis = depth % self.axis
 			if curr.point[axis] > point[axis]:
