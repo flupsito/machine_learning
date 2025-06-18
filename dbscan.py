@@ -2,9 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import silhouette_score
 from collections import deque
-import time
-import kdtree
-import zscore as zs
+from machine_learning import kdtree
+from machine_learning import zscore as zs
 
 class dbscan:
 
